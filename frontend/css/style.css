@@ -2,7 +2,7 @@
     --primary-color: #4f46e5;
     --primary-hover: #4338ca;
     --bg-color: #f9fafb;
-    --card-bg: #ffffff;
+    --card-bg: #fff;
     --text-main: #111827;
     --text-muted: #6b7280;
     --border-color: #e5e7eb;
@@ -10,7 +10,7 @@
     --error-text: #b91c1c;
     --success-bg: #f0fdf4;
     --success-text: #15803d;
-    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow: 0 4px 6px -1px rgb(0 0 0 / 10%), 0 2px 4px -1px rgb(0 0 0 / 6%);
     --radius: 0.75rem;
 }
 
@@ -21,7 +21,7 @@
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--bg-color);
     color: var(--text-main);
     line-height: 1.5;
@@ -91,7 +91,7 @@ body {
 
 .form-group input:focus, .form-group select:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    box-shadow: 0 0 0 3px rgb(79 70 229 / 10%);
 }
 
 .btn {
@@ -160,13 +160,13 @@ body {
 .alert-error {
     background-color: var(--error-bg);
     color: var(--error-text);
-    border: 1px solid rgba(185, 28, 28, 0.2);
+    border: 1px solid rgb(185 28 28 / 20%);
 }
 
 .alert-success {
     background-color: var(--success-bg);
     color: var(--success-text);
-    border: 1px solid rgba(21, 128, 61, 0.2);
+    border: 1px solid rgb(21 128 61 / 20%);
 }
 
 .hidden {
@@ -200,7 +200,7 @@ body {
     font-weight: 600;
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
     .auth-card, .dashboard-card {
         padding: 1.5rem;
     }

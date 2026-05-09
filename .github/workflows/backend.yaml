@@ -33,9 +33,11 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx aiosqlite fakeredis
+          pip install pytest pytest-asyncio httpx aiosqlite fakeredis redis asyncpg
 
       - name: Run tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend
         run: |
           cd backend
           pytest
