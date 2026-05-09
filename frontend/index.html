@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Service - Damolak Challenge</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1 id="auth-title">Welcome Back</h1>
+                <p id="auth-subtitle">Please enter your details to sign in.</p>
+            </div>
+
+            <div id="alert-container" class="alert-container hidden">
+                <div id="alert-message" class="alert"></div>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label for="login-email">Email Address</label>
+                    <input type="email" id="login-email" placeholder="name@company.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Sign In</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="register-form" class="auth-form hidden">
+                <div class="form-group">
+                    <label for="register-email">Email Address</label>
+                    <input type="email" id="register-email" placeholder="name@company.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Account</button>
+            </form>
+
+            <div class="auth-footer">
+                <p id="toggle-text">Don't have an account? <a href="#" id="toggle-auth">Sign up</a></p>
+            </div>
+        </div>
+
+        <!-- Dashboard View (Hidden by default) -->
+        <div id="dashboard" class="dashboard-card hidden">
+            <div class="auth-header">
+                <h1>Dashboard</h1>
+                <p>Welcome, <span id="user-email-display"></span>!</p>
+            </div>
+            <div class="user-info">
+                <div class="info-item">
+                    <span class="label">User ID:</span>
+                    <span id="user-id" class="value"></span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Role:</span>
+                    <span id="user-role" class="value"></span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Status:</span>
+                    <span id="user-status" class="value"></span>
+                </div>
+            </div>
+            <button id="logout-btn" class="btn btn-outline">Sign Out</button>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

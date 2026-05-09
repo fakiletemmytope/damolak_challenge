@@ -1,0 +1,246 @@
+---
+name: Terraform + Deployment
+on:
+    push:
+        branches: [main]
+        paths:
+            - "terraform/**"
+            - ".github/workflows/deploy.yaml"
+            - "backend/**"
+            - "frontend/**"
+            # - "scripts/**"
+            - "docker-compose.yaml"
+
+    workflow_dispatch:
+
+jobs:
+    terraform:
+        runs-on: ubuntu-latest
+        outputs:
+            ec2_public_dns: ${{ steps.save-outputs.outputs.ec2_public_dns }}
+            ec2_public_ip: ${{ steps.save-outputs.outputs.ec2_public_ip }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: 1.9.0
+
+            - name: Configure AWS
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+
+            - name: Terraform Init & Apply
+              run: |
+                  terraform -chdir=./terraform init
+                  terraform -chdir=./terraform validate
+                  terraform -chdir=./terraform plan -out=tfplan
+                  terraform -chdir=./terraform apply -auto-approve tfplan
+
+            - name: Save Terraform outputs
+              id: save-outputs
+              run: |
+                  echo "EC2_PUBLIC_IP=$(terraform -chdir=./terraform output -raw ec2_public_ip)" >> "$GITHUB_ENV"
+                  echo "EC2_INSTANCE_ID=$(terraform -chdir=./terraform output -raw ec2_instance_id)" >> "$GITHUB_ENV"
+                  echo "VPC_ID=$(terraform -chdir=./terraform output -raw vpc_id)" >> "$GITHUB_ENV"
+                  echo "SUBNET_ID=$(terraform -chdir=./terraform output -raw subnet_id)" >> "$GITHUB_ENV"
+                  echo "ec2_public_dns=$(terraform -chdir=./terraform output -raw ec2_public_dns)" >> "$GITHUB_OUTPUT"
+                  echo "ec2_public_ip=$(terraform -chdir=./terraform output -raw ec2_public_ip)" >> "$GITHUB_OUTPUT"
+
+            - name: Validate Terraform outputs
+              run: |
+                  if [ -z "${{ steps.save-outputs.outputs.ec2_public_dns }}" ]; then
+                    echo "Error: EC2 public DNS not found in Terraform outputs"
+                    exit 1
+                  fi
+                  echo "Terraform outputs validated successfully"
+
+    deploy:
+        needs: terraform
+        runs-on: ubuntu-latest
+        if: success()
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            # Wait for EC2 instance to accept SSH connections
+            - name: Wait for EC2 SSH
+              run: |
+                  echo "Waiting for SSH connection to ${{ needs.terraform.outputs.ec2_public_dns }}"
+                  for i in {1..20}; do
+                    if nc -z ${{ needs.terraform.outputs.ec2_public_dns }} 22; then
+                      echo "SSH port is ready!"
+                      sleep 50
+                      exit 0
+                    fi
+                    echo "Waiting for SSH... (attempt $i/20)"
+                    sleep 15
+                  done
+                  echo "EC2 did not become reachable via SSH in time"
+                  exit 1
+
+            - name: Copy project files to EC2
+              uses: appleboy/scp-action@v1.0.0
+              with:
+                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
+                  username: ${{ secrets.EC2_USER }}
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  source: "backend,frontend,docker-compose.yaml"
+                  target: "/home/${{ secrets.EC2_USER }}/damolak-app/"
+                  timeout: "600s"
+                  command_timeout: "10m"
+                  strip_components: 0
+                  overwrite: true
+
+            - name: Verify file copy
+              uses: appleboy/ssh-action@v1.2.2
+              with:
+                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
+                  username: ${{ secrets.EC2_USER }}
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  script: |
+                      echo "📁 Checking directory structure..."
+                      ls -la /home/${{ secrets.EC2_USER }}/
+
+                      if [ ! -d "/home/${{ secrets.EC2_USER }}/damolak-app" ]; then
+                        echo "Error: damolak-app directory not found on EC2"
+                        exit 1
+                      fi
+
+                      echo "Contents of damolak-app directory:"
+                      ls -la /home/${{ secrets.EC2_USER }}/damolak-app/
+
+                      # Check for required files/directories
+                      required_items=("backend" "frontend" "docker-compose.yaml")
+                      missing_items=()
+
+                      for item in "${required_items[@]}"; do
+                        if [ ! -e "/home/${{ secrets.EC2_USER }}/damolak-app/$item" ]; then
+                          missing_items+=("$item")
+                        fi
+                      done
+
+                      if [ ${#missing_items[@]} -ne 0 ]; then
+                        echo "Missing items: ${missing_items[*]}"
+                        exit 1
+                      fi
+
+                      echo "All project files successfully copied to EC2"
+
+            - name: Ensure Docker is installed on EC2
+              uses: appleboy/ssh-action@v1.2.2
+              with:
+                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
+                  username: ${{ secrets.EC2_USER }}
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  script: |
+                      set -e
+
+                      # Check Docker
+                      if ! command -v docker &>/dev/null; then
+                        echo "Docker not found, installing..."
+                        curl -fsSL https://get.docker.com | sh
+                        sudo usermod -aG docker $USER
+                        # Reload group membership
+                        newgrp docker || true
+                      else
+                        echo "Docker already installed"
+                      fi
+
+                      # Check Docker Compose v2 plugin
+                      if ! docker compose version &>/dev/null; then
+                        echo "Docker Compose plugin not found, installing..."
+                        sudo mkdir -p /usr/lib/docker/cli-plugins
+
+                        # Get latest version
+                        COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep -Po '"tag_name": "\K.*?(?=")')
+
+                        curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+                          -o /usr/lib/docker/cli-plugins/docker-compose
+                        sudo chmod +x /usr/lib/docker/cli-plugins/docker-compose
+                      else
+                        echo "Docker Compose already installed"
+                      fi
+
+                      # Verify installations
+                      docker --version
+                      docker compose version
+
+            - name: Create .env on EC2
+              uses: appleboy/ssh-action@v1.2.2
+              with:
+                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
+                  username: ${{ secrets.EC2_USER }}
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  script: |
+                      # Create .env file securely without exposing content in logs
+                      cd /home/${{ secrets.EC2_USER }}/damolak-app
+
+                      # Create .env file
+                      cat > .env << EOF
+                      POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+                      POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+                      POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+                      SECRET_KEY=${{ secrets.SECRET_KEY }}
+                      DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
+                      EOF
+
+                      # Set proper permissions
+                      chmod 600 .env
+
+                      if [ -f ".env" ] && [ -s ".env" ]; then
+                        echo "Environment file created with secure permissions"
+                      else
+                        echo "Error: .env file not created or is empty"
+                        exit 1
+                      fi
+
+            - name: Deploy with Docker Compose
+              uses: appleboy/ssh-action@v1.2.2
+              with:
+                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
+                  username: ${{ secrets.EC2_USER }}
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  script: |
+                      cd /home/${{ secrets.EC2_USER }}/damolak-app
+                      docker compose down || true
+                      docker system prune -f || true
+                      docker compose up -d --build
+                      sleep 30
+                      docker compose ps
+
+            - name: Final Health Check
+              uses: appleboy/ssh-action@v1.2.2
+              with:
+                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
+                  username: ${{ secrets.EC2_USER }}
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  script: |
+                      cd /home/${{ secrets.EC2_USER }}/damolak-app
+
+                      echo "Final deployment health check..."
+
+                      # Check if containers are running
+                      if docker compose ps | grep -q "Up"; then
+                        echo "Containers are running"
+                      else
+                        echo "Some containers are not running"
+                        docker compose ps
+                        docker compose logs
+                        exit 1
+                      fi
+
+                      # Check basic connectivity
+                      if curl -f http://localhost >/dev/null 2>&1; then
+                        echo "Application is responding"
+                      else
+                        echo "Warning: Application not responding on port 80"
+                      fi
+
+                      echo "Deployment completed successfully!"
+                      echo "Application URL: http://${{ needs.terraform.outputs.ec2_public_dns }}"
