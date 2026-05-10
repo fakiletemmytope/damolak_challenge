@@ -128,10 +128,7 @@ jobs:
           host: ${{ needs.terraform.outputs.ec2_public_dns }}
           username: ${{ env.EC2_USER }}
           key_path: /tmp/key.pem
-          source: |
-            backend
-            frontend
-            docker-compose.yaml
+          source: "./backend,./frontend,./docker-compose.yaml"
           target: /home/${{ env.EC2_USER }}/damolak-app/
 
       - name: Create .env
