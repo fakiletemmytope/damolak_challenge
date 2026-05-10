@@ -24,7 +24,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
 
   terraform:
     needs: debug_aws_identity
@@ -109,7 +109,7 @@ jobs:
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ needs.terraform.outputs.ec2_public_dns }}
-          username: ${{ env.EC2_USER }}
+          username: ${{ env.EC2_USER || 'ubuntu' }}
           key_path: /tmp/damolak-key.pem
           script: |
             cloud-init status --wait
@@ -118,22 +118,22 @@ jobs:
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ needs.terraform.outputs.ec2_public_dns }}
-          username: ${{ env.EC2_USER }}
+          username: ${{ env.EC2_USER || 'ubuntu' }}
           key_path: /tmp/damolak-key.pem
           script: |
-            mkdir -p /home/${{ env.EC2_USER }}/damolak-app
+            mkdir -p /home/${{ env.EC2_USER || 'ubuntu' }}/damolak-app
 
       - name: Copy project files
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ needs.terraform.outputs.ec2_public_dns }}
-          username: ${{ env.EC2_USER }}
+          username: ${{ env.EC2_USER || 'ubuntu' }}
           key_path: /tmp/damolak-key.pem
           source: |
             backend
             frontend
             docker-compose.yaml
-          target: /home/${{ env.EC2_USER }}/damolak-app/
+          target: /home/${{ env.EC2_USER || 'ubuntu' }}/damolak-app/
           timeout: 600s
           command_timeout: 10m
           overwrite: true
@@ -142,19 +142,19 @@ jobs:
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ needs.terraform.outputs.ec2_public_dns }}
-          username: ${{ env.EC2_USER }}
+          username: ${{ env.EC2_USER || 'ubuntu' }}
           key_path: /tmp/damolak-key.pem
           script: |
-            ls -la /home/${{ env.EC2_USER }}/damolak-app
+            ls -la /home/${{ env.EC2_USER || 'ubuntu' }}/damolak-app
 
       - name: Create .env
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ needs.terraform.outputs.ec2_public_dns }}
-          username: ${{ env.EC2_USER }}
+          username: ${{ env.EC2_USER || 'ubuntu' }}
           key_path: /tmp/damolak-key.pem
           script: |
-            cat > /home/${{ env.EC2_USER }}/damolak-app/.env <<EOF
+            cat > /home/${{ env.EC2_USER || 'ubuntu' }}/damolak-app/.env <<EOF
             POSTGRES_USER=${{ secrets.POSTGRES_USER }}
             POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
             POSTGRES_DB=${{ secrets.POSTGRES_DB }}
@@ -162,16 +162,16 @@ jobs:
             DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
             EOF
 
-            chmod 600 /home/${{ env.EC2_USER }}/damolak-app/.env
+            chmod 600 /home/${{ env.EC2_USER || 'ubuntu' }}/damolak-app/.env
 
       - name: Deploy containers
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ needs.terraform.outputs.ec2_public_dns }}
-          username: ${{ env.EC2_USER }}
+          username: ${{ env.EC2_USER || 'ubuntu' }}
           key_path: /tmp/damolak-key.pem
           script: |
-            cd /home/${{ env.EC2_USER }}/damolak-app
+            cd /home/${{ env.EC2_USER || 'ubuntu' }}/damolak-app
 
             docker compose down || true
             docker system prune -f || true
@@ -185,10 +185,10 @@ jobs:
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ needs.terraform.outputs.ec2_public_dns }}
-          username: ${{ env.EC2_USER }}
+          username: ${{ env.EC2_USER || 'ubuntu' }}
           key_path: /tmp/damolak-key.pem
           script: |
-            docker compose -f /home/${{ env.EC2_USER }}/damolak-app/docker-compose.yaml ps
+            docker compose -f /home/${{ env.EC2_USER || 'ubuntu' }}/damolak-app/docker-compose.yaml ps
 
             curl -f http://localhost || exit 1
 
