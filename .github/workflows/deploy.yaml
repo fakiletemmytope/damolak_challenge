@@ -35,6 +35,7 @@ jobs:
             ec2_public_dns: ${{ steps.save-outputs.outputs.ec2_public_dns }}
             ec2_public_ip: ${{ steps.save-outputs.outputs.ec2_public_ip }}
             fqdn: ${{ steps.save-outputs.outputs.fqdn }}
+            ssm_private_key_name: ${{ steps.save-outputs.outputs.ssm_private_key_name }}
 
         steps:
             - name: Checkout repository
@@ -65,6 +66,7 @@ jobs:
                   echo "ec2_public_dns=$(terraform -chdir=./terraform output -raw ec2_public_dns)" >> "$GITHUB_OUTPUT"
                   echo "ec2_public_ip=$(terraform -chdir=./terraform output -raw ec2_public_ip)" >> "$GITHUB_OUTPUT"
                   echo "fqdn=$(terraform -chdir=./terraform output -raw fqdn)" >> "$GITHUB_OUTPUT"
+                  echo "ssm_private_key_name=$(terraform -chdir=./terraform output -raw ssm_private_key_name)" >> "$GITHUB_OUTPUT"
 
             - name: Validate Terraform outputs
               run: |
@@ -92,11 +94,20 @@ jobs:
             - name: Get private key from SSM
               run: |
                   aws ssm get-parameter \
-                    --name "/damolak/ec2-private-key" \
+                    --name "${{ needs.terraform.outputs.ssm_private_key_name }}" \
                     --with-decryption \
                     --query "Parameter.Value" \
                     --output text > /tmp/damolak-key.pem
                   chmod 600 /tmp/damolak-key.pem
+                  echo "EC2_PRIVATE_KEY<<EOF" >> $GITHUB_ENV
+                  cat /tmp/damolak-key.pem >> $GITHUB_ENV
+                  echo "EOF" >> $GITHUB_ENV
+
+            - name: Debug private key
+              run: |
+                  echo "Key size: $(wc -c < /tmp/damolak-key.pem)"
+                  echo "First line: $(head -1 /tmp/damolak-key.pem)"
+                  echo "Last line: $(tail -1 /tmp/damolak-key.pem)"
 
             - name: Wait for EC2 SSH
               run: |
@@ -118,7 +129,7 @@ jobs:
               with:
                   host: ${{ needs.terraform.outputs.ec2_public_dns }}
                   username: ${{ env.EC2_USER }}
-                  key_path: /tmp/damolak-key.pem
+                  key: ${{ env.EC2_PRIVATE_KEY }}
                   source: "backend,frontend,docker-compose.yaml"
                   target: "/home/${{ env.EC2_USER }}/damolak-app/"
                   timeout: "600s"
@@ -131,7 +142,7 @@ jobs:
               with:
                   host: ${{ needs.terraform.outputs.ec2_public_dns }}
                   username: ${{ env.EC2_USER }}
-                  key_path: /tmp/damolak-key.pem
+                  key: ${{ env.EC2_PRIVATE_KEY }}
                   script: |
                       echo "Checking directory structure..."
                       ls -la /home/${{ env.EC2_USER }}/
@@ -165,7 +176,7 @@ jobs:
               with:
                   host: ${{ needs.terraform.outputs.ec2_public_dns }}
                   username: ${{ env.EC2_USER }}
-                  key_path: /tmp/damolak-key.pem
+                  key: ${{ env.EC2_PRIVATE_KEY }}
                   script: |
                       cd /home/${{ env.EC2_USER }}/damolak-app
 
@@ -191,7 +202,7 @@ jobs:
               with:
                   host: ${{ needs.terraform.outputs.ec2_public_dns }}
                   username: ${{ env.EC2_USER }}
-                  key_path: /tmp/damolak-key.pem
+                  key: ${{ env.EC2_PRIVATE_KEY }}
                   script: |
                       cd /home/${{ env.EC2_USER }}/damolak-app
                       docker compose down || true
@@ -205,7 +216,7 @@ jobs:
               with:
                   host: ${{ needs.terraform.outputs.ec2_public_dns }}
                   username: ${{ env.EC2_USER }}
-                  key_path: /tmp/damolak-key.pem
+                  key: ${{ env.EC2_PRIVATE_KEY }}
                   script: |
                       cd /home/${{ env.EC2_USER }}/damolak-app
 
