@@ -101,13 +101,6 @@ jobs:
           head -1 /tmp/damolak-key.pem
           tail -1 /tmp/damolak-key.pem
 
-      - name: Test raw SSH
-        run: |
-            ssh -vvv \
-              -i /tmp/damolak-key.pem \
-              -o StrictHostKeyChecking=no \
-              ${{ env.EC2_USER }}@${{ needs.terraform.outputs.ec2_public_dns }} exit
-
       - name: Wait for SSH Port
         run: |
           for i in {1..30}; do
@@ -119,6 +112,13 @@ jobs:
             sleep 10
           done
           exit 1
+
+      - name: Test raw SSH
+        run: |
+            ssh -vvv \
+              -i /tmp/damolak-key.pem \
+              -o StrictHostKeyChecking=no \
+              ${{ env.EC2_USER }}@${{ needs.terraform.outputs.ec2_public_dns }} exit
 
       - name: Wait for cloud-init
         uses: appleboy/ssh-action@v1.2.2
