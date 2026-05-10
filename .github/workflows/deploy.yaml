@@ -59,19 +59,25 @@ jobs:
             - name: Save Terraform outputs
               id: save-outputs
               run: |
-                  echo "EC2_PUBLIC_IP=$(terraform -chdir=./terraform output -raw ec2_public_ip)" >> "$GITHUB_ENV"
-                  echo "EC2_INSTANCE_ID=$(terraform -chdir=./terraform output -raw ec2_instance_id)" >> "$GITHUB_ENV"
-                  echo "VPC_ID=$(terraform -chdir=./terraform output -raw vpc_id)" >> "$GITHUB_ENV"
-                  echo "SUBNET_ID=$(terraform -chdir=./terraform output -raw subnet_id)" >> "$GITHUB_ENV"
+                  # Extract simple outputs
                   echo "ec2_public_dns=$(terraform -chdir=./terraform output -raw ec2_public_dns)" >> "$GITHUB_OUTPUT"
                   echo "ec2_public_ip=$(terraform -chdir=./terraform output -raw ec2_public_ip)" >> "$GITHUB_OUTPUT"
                   echo "fqdn=$(terraform -chdir=./terraform output -raw fqdn)" >> "$GITHUB_OUTPUT"
                   
-                  # Use multi-line output for private key
-                  echo "private_key<<EOF" >> "$GITHUB_OUTPUT"
-                  terraform -chdir=./terraform output -raw private_key >> "$GITHUB_OUTPUT"
-                  echo "" >> "$GITHUB_OUTPUT" # Ensure trailing newline
-                  echo "EOF" >> "$GITHUB_OUTPUT"
+                  # Extract private key using a more robust method
+                   echo "Extracting private key..."
+                   # List all outputs for debugging if something goes wrong
+                   terraform -chdir=./terraform output
+                   
+                   PK=$(terraform -chdir=./terraform output -raw private_key)
+                  
+                  if [ -n "$PK" ]; then
+                    echo "private_key<<EOF" >> "$GITHUB_OUTPUT"
+                    echo "$PK" >> "$GITHUB_OUTPUT"
+                    echo "EOF" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "Warning: private_key output is empty or not found"
+                  fi
 
             - name: Validate Terraform outputs
               run: |
