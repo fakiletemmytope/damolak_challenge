@@ -33,7 +33,12 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx aiosqlite fakeredis redis asyncpg pyjwt
+          pip install pytest pytest-asyncio httpx aiosqlite fakeredis redis asyncpg pyjwt ruff
+
+      - name: Lint with Ruff
+        run: |
+          cd backend
+          ruff check . --fix
 
       - name: Run tests
         env:

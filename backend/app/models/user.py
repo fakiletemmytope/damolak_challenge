@@ -1,10 +1,11 @@
-from sqlmodel import SQLModel, Field
-from sqlalchemy import Column, DateTime, func, Enum as SAEnum
 import enum
 from datetime import datetime
 
+from sqlalchemy import Column, DateTime, func
+from sqlmodel import Field, SQLModel
 
-class Role(str, enum.Enum):
+
+class Role(enum.Enum):
     USER = "user"
     ADMIN = "admin"
 

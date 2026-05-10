@@ -1,6 +1,9 @@
-from dotenv import load_dotenv
-load_dotenv()
 import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # Database Configuration
 database_url = os.getenv("DATABASE_URL")

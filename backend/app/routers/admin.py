@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from app.dependencies import get_current_user, user_role
-from app.schemas.auth import UserRead
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app.database import get_session
-from app.models.user import User, Role
-from sqlmodel import select, Session
+from app.dependencies import get_current_user, user_role
+from app.models.user import Role, User
+from app.schemas.auth import UserRead
 
 router = APIRouter(prefix="/admin")
 

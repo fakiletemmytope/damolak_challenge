@@ -1,9 +1,8 @@
-from sqlmodel import create_engine, SQLModel
-from app.config import database_url
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from app.models.user import User
 
+from app.config import database_url
 
 DATABASE_URL = f"postgresql+asyncpg://{database_url}"
 engine = create_async_engine(DATABASE_URL, echo=True)

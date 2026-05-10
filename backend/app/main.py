@@ -1,12 +1,14 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import logging
-from app.database import init_db, engine
-from app.routers import auth, admin
+
+from app.database import engine, init_db
+from app.routers import admin, auth
+
 
 @asynccontextmanager
-async def lifespan(FastAPI):
+async def lifespan(app: FastAPI):
     await init_db()
     print("Database initialized")
     yield
@@ -17,6 +19,7 @@ async def lifespan(FastAPI):
     finally:
         await engine.dispose()
         print("Database engine disposed")
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -37,8 +40,4 @@ app.include_router(admin.router, tags=["admin"])
 
 @app.get("/health")
 async def health():
-    logger.debug("Health check endpoint called")
     return {"status": "healthy"}
-
-
-

@@ -1,14 +1,14 @@
-from typing import Optional
-from pydantic import BaseModel
-from app.models.user import Role
 from datetime import datetime
 
+from pydantic import BaseModel
+
+from app.models.user import Role
 
 
 class UserCreate(BaseModel):
     email: str
     password: str
-    role: Optional[Role] = None
+    role: Role | None = None
 
 class UserRead(BaseModel):
     id: int
@@ -27,5 +27,5 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     token: str
-    refresh_token: Optional[str] = None
+    refresh_token: str | None = None
     user_details: UserRead
