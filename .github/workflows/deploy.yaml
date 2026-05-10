@@ -66,7 +66,12 @@ jobs:
                   echo "ec2_public_dns=$(terraform -chdir=./terraform output -raw ec2_public_dns)" >> "$GITHUB_OUTPUT"
                   echo "ec2_public_ip=$(terraform -chdir=./terraform output -raw ec2_public_ip)" >> "$GITHUB_OUTPUT"
                   echo "fqdn=$(terraform -chdir=./terraform output -raw fqdn)" >> "$GITHUB_OUTPUT"
-                  echo "private_key=$(terraform -chdir=./terraform output -raw private_key)" >> "$GITHUB_OUTPUT"
+                  
+                  # Use multi-line output for private key
+                  echo "private_key<<EOF" >> "$GITHUB_OUTPUT"
+                  terraform -chdir=./terraform output -raw private_key >> "$GITHUB_OUTPUT"
+                  echo "" >> "$GITHUB_OUTPUT" # Ensure trailing newline
+                  echo "EOF" >> "$GITHUB_OUTPUT"
 
             - name: Validate Terraform outputs
               run: |
