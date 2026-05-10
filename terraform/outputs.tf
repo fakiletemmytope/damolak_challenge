@@ -38,3 +38,8 @@ output "private_key" {
   value       = module.key_pair.private_key
   sensitive   = true
 }
+
+output "ssm_private_key_name" {
+  description = "The name of the SSM parameter storing the private key"
+  value       = module.key_pair.ssm_private_key_name
+}
