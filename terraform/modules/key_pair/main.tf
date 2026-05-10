@@ -1,7 +1,6 @@
 # Generate the key pair
 resource "tls_private_key" "main" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
+  algorithm = "ED25519"
 }
 
 # Register the public key with AWS

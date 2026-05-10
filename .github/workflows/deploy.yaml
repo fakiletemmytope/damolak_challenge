@@ -83,15 +83,30 @@ jobs:
             --name "${{ needs.terraform.outputs.ssm_private_key_name }}" \
             --with-decryption \
             --query "Parameter.Value" \
-            --output text > /tmp/damolak-key.pem
+            --output json | jq -r '.' > /tmp/damolak-key.pem
 
           chmod 600 /tmp/damolak-key.pem
+      
+      - name: Validate private key
+        run: |
+            echo "==== START KEY ===="
+            cat /tmp/damolak-key.pem
+            echo "==== END KEY ===="
+
+            ssh-keygen -lf /tmp/damolak-key.pem
 
       - name: Debug private key
         run: |
           echo "Key size: $(wc -c < /tmp/damolak-key.pem)"
           head -1 /tmp/damolak-key.pem
           tail -1 /tmp/damolak-key.pem
+
+      - name: Test raw SSH
+        run: |
+            ssh -vvv \
+              -i /tmp/damolak-key.pem \
+              -o StrictHostKeyChecking=no \
+              ${{ env.EC2_USER }}@${{ needs.terraform.outputs.ec2_public_dns }} exit
 
       - name: Wait for SSH Port
         run: |
