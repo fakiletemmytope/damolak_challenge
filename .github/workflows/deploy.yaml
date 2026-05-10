@@ -19,7 +19,14 @@ jobs:
         outputs:
             ec2_public_dns: ${{ steps.save-outputs.outputs.ec2_public_dns }}
             ec2_public_ip: ${{ steps.save-outputs.outputs.ec2_public_ip }}
+
         steps:
+            - name: Debug AWS identity
+              run: aws sts get-caller-identity
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: us-east-1
             - name: Checkout repository
               uses: actions/checkout@v4
 
