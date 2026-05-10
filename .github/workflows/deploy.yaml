@@ -26,7 +26,7 @@ jobs:
     terraform:
         needs: debug_aws_identity
         runs-on: ubuntu-latest
-        if: success(debug_aws_identity)
+        if: success()
         outputs:
             ec2_public_dns: ${{ steps.save-outputs.outputs.ec2_public_dns }}
             ec2_public_ip: ${{ steps.save-outputs.outputs.ec2_public_ip }}
