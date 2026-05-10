@@ -64,20 +64,21 @@ jobs:
                   echo "ec2_public_ip=$(terraform -chdir=./terraform output -raw ec2_public_ip)" >> "$GITHUB_OUTPUT"
                   echo "fqdn=$(terraform -chdir=./terraform output -raw fqdn)" >> "$GITHUB_OUTPUT"
                   
-                  # Extract private key using a more robust method
-                   echo "Extracting private key..."
-                   # List all outputs for debugging if something goes wrong
-                   terraform -chdir=./terraform output
-                   
-                   PK=$(terraform -chdir=./terraform output -raw private_key)
+                  # Extract private key to a file first to preserve formatting
+                  terraform -chdir=./terraform output -raw private_key > private_key.pem
                   
-                  if [ -n "$PK" ]; then
+                  # Verify the key is not empty
+                  if [ -s private_key.pem ]; then
                     echo "private_key<<EOF" >> "$GITHUB_OUTPUT"
-                    echo "$PK" >> "$GITHUB_OUTPUT"
+                    cat private_key.pem >> "$GITHUB_OUTPUT"
+                    echo "" >> "$GITHUB_OUTPUT"
                     echo "EOF" >> "$GITHUB_OUTPUT"
+                    echo "Private key successfully captured"
                   else
-                    echo "Warning: private_key output is empty or not found"
+                    echo "Error: private_key output is empty"
+                    exit 1
                   fi
+                  rm private_key.pem
 
             - name: Validate Terraform outputs
               run: |
@@ -99,14 +100,14 @@ jobs:
             - name: Wait for EC2 SSH
               run: |
                   echo "Waiting for SSH connection to ${{ needs.terraform.outputs.ec2_public_dns }}"
-                  for i in {1..20}; do
+                  for i in {1..30}; do
                     if nc -z ${{ needs.terraform.outputs.ec2_public_dns }} 22; then
-                      echo "SSH port is ready!"
-                      sleep 50
+                      echo "SSH port is ready! Giving the daemon 20 seconds to initialize..."
+                      sleep 20
                       exit 0
                     fi
-                    echo "Waiting for SSH... (attempt $i/20)"
-                    sleep 15
+                    echo "Waiting for SSH... (attempt $i/30)"
+                    sleep 10
                   done
                   echo "EC2 did not become reachable via SSH in time"
                   exit 1
