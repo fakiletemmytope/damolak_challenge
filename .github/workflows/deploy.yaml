@@ -1,245 +1,200 @@
----
 name: Terraform + Deployment
-
 on:
-    push:
-        branches: [main]
-        paths:
-            - "terraform/**"
-            - ".github/workflows/deploy.yaml"
-            - "backend/**"
-            - "frontend/**"
-            - "docker-compose.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/deploy.yaml"
+      - "backend/**"
+      - "frontend/**"
+      - "docker-compose.yaml"
 
-    workflow_dispatch:
+  workflow_dispatch:
 
 env:
-    EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
+  EC2_USER: ${{ secrets.EC2_USER }}
 
 jobs:
-    debug_aws_identity:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Debug AWS identity
-              run: aws sts get-caller-identity
-              env:
-                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  AWS_DEFAULT_REGION: us-east-1
+  debug_aws_identity:
+    runs-on: ubuntu-latest
 
-    terraform:
-        needs: debug_aws_identity
-        runs-on: ubuntu-latest
-        if: success()
-        outputs:
-            ec2_public_dns: ${{ steps.save-outputs.outputs.ec2_public_dns }}
-            ec2_public_ip: ${{ steps.save-outputs.outputs.ec2_public_ip }}
-            fqdn: ${{ steps.save-outputs.outputs.fqdn }}
-            ssm_private_key_name: ${{ steps.save-outputs.outputs.ssm_private_key_name }}
+    steps:
+      - name: Debug AWS identity
+        run: aws sts get-caller-identity
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  terraform:
+    needs: debug_aws_identity
+    runs-on: ubuntu-latest
 
-            - name: Setup Terraform
-              uses: hashicorp/setup-terraform@v3
-              with:
-                  terraform_version: 1.9.0
+    outputs:
+      ec2_public_dns: ${{ steps.save-outputs.outputs.ec2_public_dns }}
+      ec2_public_ip: ${{ steps.save-outputs.outputs.ec2_public_ip }}
+      fqdn: ${{ steps.save-outputs.outputs.fqdn }}
+      ssm_private_key_name: ${{ steps.save-outputs.outputs.ssm_private_key_name }}
 
-            - name: Configure AWS
-              uses: aws-actions/configure-aws-credentials@v4
-              with:
-                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  aws-region: ${{ secrets.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Terraform Init & Apply
-              run: |
-                  terraform -chdir=./terraform init
-                  terraform -chdir=./terraform validate
-                  terraform -chdir=./terraform plan -out=tfplan
-                  terraform -chdir=./terraform apply -auto-approve tfplan
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
 
-            - name: Save Terraform outputs
-              id: save-outputs
-              run: |
-                  echo "ec2_public_dns=$(terraform -chdir=./terraform output -raw ec2_public_dns)" >> "$GITHUB_OUTPUT"
-                  echo "ec2_public_ip=$(terraform -chdir=./terraform output -raw ec2_public_ip)" >> "$GITHUB_OUTPUT"
-                  echo "fqdn=$(terraform -chdir=./terraform output -raw fqdn)" >> "$GITHUB_OUTPUT"
-                  echo "ssm_private_key_name=$(terraform -chdir=./terraform output -raw ssm_private_key_name)" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-            - name: Validate Terraform outputs
-              run: |
-                  if [ -z "${{ steps.save-outputs.outputs.ec2_public_dns }}" ]; then
-                    echo "Error: EC2 public DNS not found in Terraform outputs"
-                    exit 1
-                  fi
-                  echo "Terraform outputs validated successfully"
+      - name: Terraform Apply
+        run: |
+          terraform -chdir=terraform init
+          terraform -chdir=terraform validate
+          terraform -chdir=terraform plan -out=tfplan
+          terraform -chdir=terraform apply -auto-approve tfplan
 
-    deploy:
-        needs: terraform
-        runs-on: ubuntu-latest
-        if: success()
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+      - name: Save Terraform outputs
+        id: save-outputs
+        run: |
+          echo "ec2_public_dns=$(terraform -chdir=terraform output -raw ec2_public_dns)" >> $GITHUB_OUTPUT
+          echo "ec2_public_ip=$(terraform -chdir=terraform output -raw ec2_public_ip)" >> $GITHUB_OUTPUT
+          echo "fqdn=$(terraform -chdir=terraform output -raw fqdn)" >> $GITHUB_OUTPUT
+          echo "ssm_private_key_name=$(terraform -chdir=terraform output -raw ssm_private_key_name)" >> $GITHUB_OUTPUT
 
-            - name: Configure AWS
-              uses: aws-actions/configure-aws-credentials@v4
-              with:
-                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  aws-region: ${{ secrets.AWS_REGION }}
+  deploy:
+    needs: terraform
+    runs-on: ubuntu-latest
 
-            - name: Get private key from SSM
-              run: |
-                  aws ssm get-parameter \
-                    --name "${{ needs.terraform.outputs.ssm_private_key_name }}" \
-                    --with-decryption \
-                    --query "Parameter.Value" \
-                    --output text > /tmp/damolak-key.pem
-                  chmod 600 /tmp/damolak-key.pem
-                  echo "EC2_PRIVATE_KEY<<EOF" >> $GITHUB_ENV
-                  cat /tmp/damolak-key.pem >> $GITHUB_ENV
-                  echo "EOF" >> $GITHUB_ENV
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Debug private key
-              run: |
-                  echo "Key size: $(wc -c < /tmp/damolak-key.pem)"
-                  echo "First line: $(head -1 /tmp/damolak-key.pem)"
-                  echo "Last line: $(tail -1 /tmp/damolak-key.pem)"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-            - name: Wait for EC2 SSH
-              run: |
-                  echo "Waiting for SSH connection to ${{ needs.terraform.outputs.ec2_public_dns }}"
-                  for i in {1..30}; do
-                    if nc -z ${{ needs.terraform.outputs.ec2_public_dns }} 22; then
-                      echo "SSH port is ready! Giving the daemon 20 seconds to initialize..."
-                      sleep 20
-                      exit 0
-                    fi
-                    echo "Waiting for SSH... (attempt $i/30)"
-                    sleep 10
-                  done
-                  echo "EC2 did not become reachable via SSH in time"
-                  exit 1
+      - name: Retrieve private key from SSM
+        run: |
+          aws ssm get-parameter \
+            --name "${{ needs.terraform.outputs.ssm_private_key_name }}" \
+            --with-decryption \
+            --query "Parameter.Value" \
+            --output text > /tmp/damolak-key.pem
 
-            - name: Copy project files to EC2
-              uses: appleboy/scp-action@v1.0.0
-              with:
-                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
-                  username: ${{ env.EC2_USER }}
-                  key: ${{ env.EC2_PRIVATE_KEY }}
-                  source: "backend,frontend,docker-compose.yaml"
-                  target: "/home/${{ env.EC2_USER }}/damolak-app/"
-                  timeout: "600s"
-                  command_timeout: "10m"
-                  strip_components: 0
-                  overwrite: true
+          chmod 600 /tmp/damolak-key.pem
 
-            - name: Verify file copy
-              uses: appleboy/ssh-action@v1.2.2
-              with:
-                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
-                  username: ${{ env.EC2_USER }}
-                  key: ${{ env.EC2_PRIVATE_KEY }}
-                  script: |
-                      echo "Checking directory structure..."
-                      ls -la /home/${{ env.EC2_USER }}/
+      - name: Debug private key
+        run: |
+          echo "Key size: $(wc -c < /tmp/damolak-key.pem)"
+          head -1 /tmp/damolak-key.pem
+          tail -1 /tmp/damolak-key.pem
 
-                      if [ ! -d "/home/${{ env.EC2_USER }}/damolak-app" ]; then
-                        echo "Error: damolak-app directory not found on EC2"
-                        exit 1
-                      fi
+      - name: Wait for SSH Port
+        run: |
+          for i in {1..30}; do
+            if nc -z ${{ needs.terraform.outputs.ec2_public_dns }} 22; then
+              echo "SSH reachable"
+              exit 0
+            fi
+            echo "Waiting for SSH... $i/30"
+            sleep 10
+          done
+          exit 1
 
-                      echo "Contents of damolak-app directory:"
-                      ls -la /home/${{ env.EC2_USER }}/damolak-app/
+      - name: Wait for cloud-init
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ needs.terraform.outputs.ec2_public_dns }}
+          username: ${{ env.EC2_USER }}
+          key_path: /tmp/damolak-key.pem
+          script: |
+            cloud-init status --wait
 
-                      required_items=("backend" "frontend" "docker-compose.yaml")
-                      missing_items=()
+      - name: Prepare deployment directory
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ needs.terraform.outputs.ec2_public_dns }}
+          username: ${{ env.EC2_USER }}
+          key_path: /tmp/damolak-key.pem
+          script: |
+            mkdir -p /home/${{ env.EC2_USER }}/damolak-app
 
-                      for item in "${required_items[@]}"; do
-                        if [ ! -e "/home/${{ env.EC2_USER }}/damolak-app/$item" ]; then
-                          missing_items+=("$item")
-                        fi
-                      done
+      - name: Copy project files
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ needs.terraform.outputs.ec2_public_dns }}
+          username: ${{ env.EC2_USER }}
+          key_path: /tmp/damolak-key.pem
+          source: |
+            backend
+            frontend
+            docker-compose.yaml
+          target: /home/${{ env.EC2_USER }}/damolak-app/
+          timeout: 600s
+          command_timeout: 10m
+          overwrite: true
 
-                      if [ ${#missing_items[@]} -ne 0 ]; then
-                        echo "Missing items: ${missing_items[*]}"
-                        exit 1
-                      fi
+      - name: Verify copied files
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ needs.terraform.outputs.ec2_public_dns }}
+          username: ${{ env.EC2_USER }}
+          key_path: /tmp/damolak-key.pem
+          script: |
+            ls -la /home/${{ env.EC2_USER }}/damolak-app
 
-                      echo "All project files successfully copied to EC2"
+      - name: Create .env
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ needs.terraform.outputs.ec2_public_dns }}
+          username: ${{ env.EC2_USER }}
+          key_path: /tmp/damolak-key.pem
+          script: |
+            cat > /home/${{ env.EC2_USER }}/damolak-app/.env <<EOF
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
+            EOF
 
-            - name: Create .env on EC2
-              uses: appleboy/ssh-action@v1.2.2
-              with:
-                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
-                  username: ${{ env.EC2_USER }}
-                  key: ${{ env.EC2_PRIVATE_KEY }}
-                  script: |
-                      cd /home/${{ env.EC2_USER }}/damolak-app
+            chmod 600 /home/${{ env.EC2_USER }}/damolak-app/.env
 
-                      cat > .env << EOF
-                      POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-                      POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-                      POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-                      SECRET_KEY=${{ secrets.SECRET_KEY }}
-                      DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
-                      EOF
+      - name: Deploy containers
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ needs.terraform.outputs.ec2_public_dns }}
+          username: ${{ env.EC2_USER }}
+          key_path: /tmp/damolak-key.pem
+          script: |
+            cd /home/${{ env.EC2_USER }}/damolak-app
 
-                      chmod 600 .env
+            docker compose down || true
+            docker system prune -f || true
 
-                      if [ -f ".env" ] && [ -s ".env" ]; then
-                        echo "Environment file created with secure permissions"
-                      else
-                        echo "Error: .env file not created or is empty"
-                        exit 1
-                      fi
+            docker compose up -d --build
 
-            - name: Deploy with Docker Compose
-              uses: appleboy/ssh-action@v1.2.2
-              with:
-                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
-                  username: ${{ env.EC2_USER }}
-                  key: ${{ env.EC2_PRIVATE_KEY }}
-                  script: |
-                      cd /home/${{ env.EC2_USER }}/damolak-app
-                      docker compose down || true
-                      docker system prune -f || true
-                      docker compose up -d --build
-                      sleep 30
-                      docker compose ps
+            sleep 30
+            docker compose ps
 
-            - name: Final Health Check
-              uses: appleboy/ssh-action@v1.2.2
-              with:
-                  host: ${{ needs.terraform.outputs.ec2_public_dns }}
-                  username: ${{ env.EC2_USER }}
-                  key: ${{ env.EC2_PRIVATE_KEY }}
-                  script: |
-                      cd /home/${{ env.EC2_USER }}/damolak-app
+      - name: Final health check
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ needs.terraform.outputs.ec2_public_dns }}
+          username: ${{ env.EC2_USER }}
+          key_path: /tmp/damolak-key.pem
+          script: |
+            docker compose -f /home/${{ env.EC2_USER }}/damolak-app/docker-compose.yaml ps
 
-                      echo "Final deployment health check..."
+            curl -f http://localhost || exit 1
 
-                      if docker compose ps backend | grep -q "Up"; then
-                        echo "Backend container is running"
-                      else
-                        echo "Error: backend container is not running"
-                        docker compose ps
-                        docker compose logs backend
-                        exit 1
-                      fi
+            echo "Deployment successful"
+            echo "URL: http://${{ needs.terraform.outputs.fqdn }}"
 
-                      if curl -f http://localhost >/dev/null 2>&1; then
-                        echo "Application is responding"
-                      else
-                        echo "Warning: Application not responding on port 80"
-                      fi
-
-                      echo "Deployment completed successfully!"
-                      echo "Application URL: http://${{ needs.terraform.outputs.fqdn }}"
-
-            - name: Cleanup private key
-              if: always()
-              run: rm -f /tmp/damolak-key.pem
+      - name: Cleanup key
+        if: always()
+        run: rm -f /tmp/damolak-key.pem
