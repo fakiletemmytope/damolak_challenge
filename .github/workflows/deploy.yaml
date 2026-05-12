@@ -6,6 +6,8 @@ on:
     paths:
       - "terraform/**"
       - ".github/workflows/deploy.yaml"
+      - ".github/workflows/backend.yaml"
+      - ".github/workflows/frontend.yaml"
       - "backend/**"
       - "frontend/**"
       - "docker-compose.yaml"
