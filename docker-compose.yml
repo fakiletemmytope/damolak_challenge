@@ -6,12 +6,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-damolak_db}
     volumes:
-      - postgres_data:/var/lib/postgresql/18/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-damolak_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - appnet
 
   redis:
     image: redis:8.4.0-alpine
@@ -20,12 +22,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - appnet
 
   backend:
     build: ./backend
     image: temmytope/damolak-be:latest
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://user:password@db:5432/damolak_db}
       REDIS_HOST: redis
@@ -37,16 +41,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - appnet
 
   frontend:
     build: ./frontend
     image: temmytope/damolak-fe:latest
     ports:
       - "80:80"
-    environment:
-      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
     depends_on:
       - backend
+    networks:
+      - appnet
 
 volumes:
   postgres_data:
+
+networks:
+  appnet:
