@@ -1,5 +1,6 @@
 import asyncio
 import logging
+
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -38,7 +39,10 @@ async def init_db():
             break
         except Exception as e:
             retries -= 1
-            logger.warning(f"Database connection failed. Retrying... ({retries} retries left). Error: {e}")
+            logger.warning(
+                f"""Database connection failed. Retrying... (
+                {retries} retries left). Error: {e}"""
+            )
             if retries == 0:
                 logger.error("Could not connect to the database after several retries")
                 raise e
