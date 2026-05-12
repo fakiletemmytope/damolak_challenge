@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000/auth';
+const API_BASE_URL = (window.APP_CONFIG ? window.APP_CONFIG.API_BASE_URL : 'http://localhost:8000') + '/auth';
 
 // State management
 let isLogin = true;

@@ -1,4 +1,4 @@
-# Use official Python runtime as a parent image
+# Use the official Python 3.12-slim image
 FROM python:3.12-slim
 
 # Set environment variables
@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
-# Expose port
+# Expose port 8000
 EXPOSE 8000
 
 # Start the application
