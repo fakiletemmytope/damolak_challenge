@@ -24,14 +24,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Add CORS middleware
+origins = [
+    "http://damolak.temmytope.online",
+    "https://damolak.temmytope.online",
+    "*"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
-    # allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # Include routers
 app.include_router(auth.router, tags=["auth"])
