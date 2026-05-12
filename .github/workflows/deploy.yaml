@@ -159,7 +159,12 @@ jobs:
 
             docker compose down || true
             docker system prune -f || true
-            docker compose up -d --build
+
+            # Pull the latest images from Docker Hub
+            docker compose pull
+
+            # Start containers using the pulled images
+            docker compose up -d
 
             sleep 30
             docker compose ps
