@@ -27,7 +27,6 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     "http://damolak.temmytope.online",
     "https://damolak.temmytope.online",
-    "*"
 ]
 
 app.add_middleware(
