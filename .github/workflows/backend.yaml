@@ -43,6 +43,7 @@ jobs:
       - name: Run tests
         env:
           PYTHONPATH: ${{ github.workspace }}/backend
+          DATABASE_URL: sqlite+aiosqlite:///:memory:
         run: |
           cd backend
           pytest
